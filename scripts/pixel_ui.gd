@@ -1,6 +1,7 @@
 extends RefCounted
 ## Shared nine-slice pixel-art UI styles.
 
+const BOLD = preload("res://assets/fonts/Nunito-ExtraBold.ttf")
 const PANEL := preload("res://assets/ui/panel.png")
 const NORMAL := preload("res://assets/ui/button.png")
 const HOVER := preload("res://assets/ui/button_hover.png")
@@ -16,6 +17,7 @@ static func style(texture: Texture2D, margin: float = 8.0) -> StyleBoxTexture:
 	return box
 
 static func apply_button(button: Button) -> void:
+	button.add_theme_font_override("font", BOLD)
 	button.add_theme_stylebox_override("normal", style(NORMAL))
 	button.add_theme_stylebox_override("hover", style(HOVER))
 	button.add_theme_stylebox_override("pressed", style(PRESSED))

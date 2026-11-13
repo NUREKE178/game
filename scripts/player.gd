@@ -123,8 +123,8 @@ func _physics_process(delta: float) -> void:
 			_can_double = false
 			double_jumped.emit()
 			_buffer = 0.0
-			_squash_x = 0.75
-			_squash_y = 1.35
+			_squash_x = 0.94
+			_squash_y = 1.08
 
 	if Input.is_action_just_released("jump") and velocity.y < 0.0:
 		velocity.y *= JUMP_CUT
@@ -150,8 +150,8 @@ func _physics_process(delta: float) -> void:
 
 	if on_floor and not was_on_floor:
 		# landing!
-		_squash_x = 1.45
-		_squash_y = 0.6
+		_squash_x = 1.08
+		_squash_y = 0.92
 		landed.emit(_fall_speed)
 	elif not on_floor and was_on_floor and velocity.y >= 0.0:
 		# walked off a ledge
@@ -162,14 +162,12 @@ func _physics_process(delta: float) -> void:
 
 func _do_jump(vel: float) -> void:
 	velocity.y = -vel
-	_squash_x = 0.7
-	_squash_y = 1.4
+	_squash_x = 0.94
+	_squash_y = 1.08
 
 
 func _update_visual(_delta: float) -> void:
-	var sx := _squash_x
-	var sy := _squash_y
-	scale = Vector2(facing * sx, sy)
+	# Never scale the physics body: collision and movement must stay stable.
 	# i-frame flicker
 	if _iframes > 0.0 and not dead:
 		modulate.a = 0.45 + 0.4 * sin(Time.get_ticks_msec() * 0.04)
@@ -204,8 +202,8 @@ func hurt(from_pos: Vector2) -> bool:
 	away = away.normalized()
 	velocity = Vector2(away.x * 520.0, -620.0)
 	_iframes = 1.6
-	_squash_x = 1.4
-	_squash_y = 0.65
+	_squash_x = 1.08
+	_squash_y = 0.92
 	if hearts <= 0:
 		_die()
 	return true
@@ -213,16 +211,16 @@ func hurt(from_pos: Vector2) -> bool:
 
 func bounce() -> void:
 	velocity.y = -920.0
-	_squash_x = 0.7
-	_squash_y = 1.4
+	_squash_x = 0.94
+	_squash_y = 1.08
 	bounced.emit()
 
 
 func spring_bounce() -> void:
 	velocity.y = -1500.0
 	_can_double = true
-	_squash_x = 0.6
-	_squash_y = 1.55
+	_squash_x = 0.92
+	_squash_y = 1.10
 
 
 func pit_fall() -> bool:
@@ -263,4 +261,8 @@ func _draw() -> void:
 	elif absf(velocity.x) > 40.0:
 		row = 1
 	var frame := int(anim_time * (10.0 if row == 1 else 4.0)) % 4
+	# The sprite alone flips and gently deforms, anchored to the feet.
+	var foot_y := 18.0
+	draw_set_transform(Vector2(0, foot_y * (1.0 - _squash_y)), 0.0, Vector2(facing * _squash_x, _squash_y))
 	draw_texture_rect_region(SPIRIT, Rect2(-32, -38, 64, 64), Rect2(frame * 48, row * 48, 48, 48))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

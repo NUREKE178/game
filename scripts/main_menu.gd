@@ -28,6 +28,7 @@ func _build_ui() -> void:
 	var title := Label.new()
 	title.text = "DALA"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", PixelUI.BOLD)
 	title.add_theme_font_size_override("font_size", 88)
 	title.add_theme_color_override("font_color", Color("#ffd166"))
 	title.add_theme_color_override("font_outline_color", Color(0,0,0,0.85))
@@ -125,6 +126,7 @@ func _make_card(idx: int) -> Control:
 	var badge := Label.new()
 	badge.text = "%d" % (idx + 1)
 	badge.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	badge.add_theme_font_override("font", PixelUI.BOLD)
 	badge.add_theme_font_size_override("font_size", 42)
 	badge.add_theme_color_override("font_color", Color(data.get("sun_color", "#ffd166")))
 	badge.add_theme_color_override("font_outline_color", Color(0,0,0,0.7))
@@ -134,6 +136,7 @@ func _make_card(idx: int) -> Control:
 	var name_lbl := Label.new()
 	name_lbl.text = str(data.get("name", ""))
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_override("font", PixelUI.BOLD)
 	name_lbl.add_theme_font_size_override("font_size", 22)
 	name_lbl.add_theme_color_override("font_color", Color(1,1,1,0.95))
 	vbox.add_child(name_lbl)

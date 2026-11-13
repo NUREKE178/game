@@ -812,6 +812,7 @@ func _make_overlay(title: String, bg: Color) -> Control:
 	label.name = "Title"
 	label.text = title
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", PixelUI.BOLD)
 	label.add_theme_font_size_override("font_size", 56)
 	label.add_theme_color_override("font_color", Color("#ffd166"))
 	label.add_theme_color_override("font_outline_color", Color(0,0,0,0.8))
