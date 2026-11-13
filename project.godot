@@ -1,0 +1,46 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all that obvious.
+;
+; Format:
+;   [section] ; comment
+;   param=value ; comment
+
+config_version=5
+
+[application]
+
+config/name="DALA — Steppe Spirit"
+config/version="1.0.0"
+config/icon="res://icon.svg"
+run/main_scene="res://scenes/main_menu.tscn"
+config/description="A juicy 2D action-platformer about a little steppe spirit. Jump, double-jump, dash, stomp slimes, collect coins and raise the flag across the Kazakh steppe."
+
+[autoload]
+
+SFX="*res://scripts/sfx.gd"
+Game="*res://scripts/game_state.gd"
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
+window/title="DALA — Steppe Spirit"
+
+[rendering]
+
+environment/defaults/default_clear_color=Color(0.09, 0.10, 0.18, 1)
+
+[layer_names]
+
+2d_physics/layer_1="world"
+2d_physics/layer_2="player"
+2d_physics/layer_3="enemy"
+2d_physics/layer_4="pickup"
+2d_physics/layer_5="hazard"
+
+[physics]
+
+2d/default_gravity=2400.0
