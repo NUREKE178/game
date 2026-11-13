@@ -9,6 +9,7 @@ const WORLD_W := MAP_W * TILE
 const WORLD_H := MAP_H * TILE
 
 # Preloads
+const PixelUI = preload("res://scripts/pixel_ui.gd")
 const PlayerScript = preload("res://scripts/player.gd")
 const SlimeScript = preload("res://scripts/slime.gd")
 const CoinScript = preload("res://scripts/coin.gd")
@@ -45,6 +46,7 @@ var level_done: bool = false
 var paused: bool = false
 var shake_t: float = 0.0
 var shake_amt: float = 0.0
+var pause_started: float = 0.0
 
 # Overlays
 var pause_overlay: Control = null
@@ -56,6 +58,7 @@ var _solid_cells: Array[Vector2i] = []
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	level_index = Game.current_level
 	level_data = Levels.get_level(level_index)
 	rows = Levels.parse_map(level_data)
@@ -63,6 +66,7 @@ func _ready() -> void:
 	# --- camera
 	cam = Camera2D.new()
 	cam.name = "Camera2D"
+	cam.process_mode = Node.PROCESS_MODE_PAUSABLE
 	cam.enabled = true
 	cam.position_smoothing_enabled = true
 	cam.position_smoothing_speed = 8.0
@@ -77,6 +81,7 @@ func _ready() -> void:
 	# --- parallax
 	parallax = Node2D.new()
 	parallax.name = "ParallaxBG"
+	parallax.process_mode = Node.PROCESS_MODE_PAUSABLE
 	parallax.z_index = -100
 	parallax.set_script(ParallaxScript)
 	add_child(parallax)
@@ -85,6 +90,7 @@ func _ready() -> void:
 	# --- tiles physics body
 	tiles_body = StaticBody2D.new()
 	tiles_body.name = "Tiles"
+	tiles_body.process_mode = Node.PROCESS_MODE_PAUSABLE
 	tiles_body.collision_layer = 1
 	tiles_body.collision_mask = 0
 	tiles_body.z_index = 0
@@ -93,6 +99,7 @@ func _ready() -> void:
 	# --- entities container
 	entities = Node2D.new()
 	entities.name = "Entities"
+	entities.process_mode = Node.PROCESS_MODE_PAUSABLE
 	entities.z_index = 5
 	add_child(entities)
 
@@ -100,6 +107,7 @@ func _ready() -> void:
 	ui_layer = CanvasLayer.new()
 	ui_layer.name = "UILayer"
 	ui_layer.layer = 10
+	ui_layer.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(ui_layer)
 
 	hud = Control.new()
@@ -255,7 +263,7 @@ func _spawn_player(pos: Vector2) -> void:
 	var col := CollisionShape2D.new()
 	var shape := CapsuleShape2D.new()
 	shape.radius = 14.0
-	shape.height = 22.0
+	shape.height = 28.0
 	col.shape = shape
 	col.position = Vector2(0, 4.0)
 	p.add_child(col)
@@ -273,7 +281,7 @@ func _spawn_slime(pos: Vector2) -> void:
 	var col := CollisionShape2D.new()
 	var shape := CapsuleShape2D.new()
 	shape.radius = 14.0
-	shape.height = 12.0
+	shape.height = 28.0
 	col.shape = shape
 	col.position = Vector2(0, 6)
 	s.add_child(col)
@@ -509,7 +517,7 @@ func _check_enemy_interactions() -> void:
 				else:
 					# hurt player
 					if not player.is_dashing():
-						var hurt := player.hurt(child.global_position)
+						var hurt: bool = player.hurt(child.global_position)
 						if hurt:
 							_screen_shake(10.0, 0.28)
 
@@ -574,6 +582,7 @@ func _on_player_hurt(_from_pos: Vector2) -> void:
 		hud.set_values(player.hearts, coins_got, coins_total, "", level_data.get("name", ""), player.dash_ready())
 
 func _on_player_died() -> void:
+	level_done = true
 	# small delay then show game over
 	await get_tree().create_timer(0.7).timeout
 	_show_lose()
@@ -634,8 +643,6 @@ func _spawn_dust(pos: Vector2, count: int) -> void:
 		n.set_meta("life", 0.32)
 		n.set_script(_dust_script())
 		entities.add_child(n)
-		var tw := n.create_tween()
-		tw.tween_callback(func(): pass)
 
 func _dust_script() -> GDScript:
 	var s := GDScript.new()
@@ -648,8 +655,10 @@ func _process(delta: float) -> void:
 \tif _t > life:
 \t\tqueue_free()
 \t\treturn
-\tposition += get_meta("vel") * delta
-\tget_meta("vel").y += 420.0 * delta
+\tvar vel: Vector2 = get_meta("vel")
+\tposition += vel * delta
+\tvel.y += 420.0 * delta
+\tset_meta("vel", vel)
 \tmodulate.a = 1.0 - _t / life
 \tqueue_redraw()
 func _draw() -> void:
@@ -671,7 +680,7 @@ func _spawn_confetti(pos: Vector2, col: Color, count: int) -> void:
 		n.set_meta("col", col)
 		n.set_meta("sz", randf_range(2.5, 5.0))
 		n.set_script(_confetti_script())
-		get_tree().current_scene.add_child(n)
+		entities.add_child(n)
 
 func _confetti_script() -> GDScript:
 	var s := GDScript.new()
@@ -684,9 +693,11 @@ func _process(delta: float) -> void:
 \tif _t > life:
 \t\tqueue_free()
 \t\treturn
-\tposition += get_meta("vel") * delta
-\tget_meta("vel").y += 900.0 * delta
-\tget_meta("vel").x *= 1.0 - delta * 1.5
+\tvar vel: Vector2 = get_meta("vel")
+\tposition += vel * delta
+\tvel.y += 900.0 * delta
+\tvel.x *= 1.0 - delta * 1.5
+\tset_meta("vel", vel)
 \trotation += delta * 8.0
 \tmodulate.a = 1.0 - _t / life
 \tqueue_redraw()
@@ -709,7 +720,7 @@ func _spawn_dash_afterimage(dir: float) -> void:
 		a.set_meta("life", 0.18 - i * 0.04)
 		# copy player visual via simple circle
 		a.set_script(_afterimage_script())
-		get_tree().current_scene.add_child(a)
+		entities.add_child(a)
 		# auto free
 		var timer := Timer.new()
 		timer.wait_time = 0.2
@@ -744,7 +755,7 @@ func _spawn_floating_text(pos: Vector2, text: String) -> void:
 	l.add_theme_color_override("font_color", Color("#fff3b0"))
 	l.add_theme_color_override("font_outline_color", Color(0,0,0,0.7))
 	l.add_theme_constant_override("outline_size", 6)
-	get_tree().current_scene.add_child(l)
+	entities.add_child(l)
 	var tw := l.create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(l, "global_position:y", l.global_position.y - 36.0, 0.7).set_ease(Tween.EASE_OUT)
@@ -766,11 +777,11 @@ func _build_overlays() -> void:
 	# pause buttons
 	_add_button(pause_overlay, "Жалғастыру", _resume_game)
 	_add_button(pause_overlay, "Қайта ойнау", _retry_level)
-	_add_button(pause_overlay, "Мәзір", func(): Game.goto_menu())
+	_add_button(pause_overlay, "Мәзір", func(): get_tree().paused = false; Game.goto_menu())
 
 	# lose buttons
 	_add_button(lose_overlay, "Қайта көру", _retry_level)
-	_add_button(lose_overlay, "Мәзір", func(): Game.goto_menu())
+	_add_button(lose_overlay, "Мәзір", func(): get_tree().paused = false; Game.goto_menu())
 
 	# win buttons added dynamically in _show_win
 
@@ -780,9 +791,17 @@ func _make_overlay(title: String, bg: Color) -> Control:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_STOP
 	var bg_rect := ColorRect.new()
-	bg_rect.color = bg
+	bg_rect.color = Color(bg.r, bg.g, bg.b, 0.80)
+	bg_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bg_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
 	root.add_child(bg_rect)
+	var panel := Panel.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_theme_stylebox_override("panel", PixelUI.style(PixelUI.PANEL))
+	bg_rect.add_child(panel)
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-300, -240)
+	panel.size = Vector2(600, 480)
 	var vbox := VBoxContainer.new()
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.set_anchors_preset(Control.PRESET_CENTER)
@@ -809,7 +828,7 @@ func _make_overlay(title: String, bg: Color) -> Control:
 	return root
 
 func _add_button(overlay: Control, text: String, cb: Callable) -> void:
-	var vbox: VBoxContainer = overlay.get_child(2) as VBoxContainer
+	var vbox: VBoxContainer = overlay.get_child(1) as VBoxContainer
 	var btn := Button.new()
 	btn.text = text
 	btn.custom_minimum_size = Vector2(320, 52)
@@ -817,33 +836,21 @@ func _add_button(overlay: Control, text: String, cb: Callable) -> void:
 	btn.add_theme_font_size_override("font_size", 22)
 	btn.add_theme_color_override("font_color", Color("#1a1a2e"))
 	btn.add_theme_color_override("font_hover_color", Color("#1a1a2e"))
-	btn.add_theme_stylebox_override("normal", _btn_style(Color("#ffd166")))
-	btn.add_theme_stylebox_override("hover", _btn_style(Color("#fff3b0")))
-	btn.add_theme_stylebox_override("pressed", _btn_style(Color("#e8a33d")))
+	PixelUI.apply_button(btn)
 	btn.pressed.connect(func(): SFX.play("click"); cb.call())
 	vbox.add_child(btn)
-
-func _btn_style(col: Color) -> StyleBoxFlat:
-	var s := StyleBoxFlat.new()
-	s.bg_color = col
-	s.corner_radius_top_left = 12
-	s.corner_radius_top_right = 12
-	s.corner_radius_bottom_left = 12
-	s.corner_radius_bottom_right = 12
-	s.content_margin_left = 16
-	s.content_margin_right = 16
-	s.content_margin_top = 10
-	s.content_margin_bottom = 10
-	return s
 
 func _pause_game() -> void:
 	if paused or level_done:
 		return
 	paused = true
+	pause_started = Time.get_ticks_msec() / 1000.0
 	get_tree().paused = true
 	pause_overlay.visible = true
 
 func _resume_game() -> void:
+	if paused:
+		start_time += Time.get_ticks_msec() / 1000.0 - pause_started
 	paused = false
 	get_tree().paused = false
 	pause_overlay.visible = false
@@ -856,7 +863,7 @@ func _retry_level() -> void:
 
 func _show_win(stars: int, elapsed: float) -> void:
 	# update win overlay content
-	var vbox: VBoxContainer = win_overlay.get_child(2) as VBoxContainer
+	var vbox: VBoxContainer = win_overlay.get_child(1) as VBoxContainer
 	var subtitle: Label = vbox.get_child(1) as Label
 	var mins := int(elapsed) / 60
 	var secs := int(elapsed) % 60
@@ -893,10 +900,11 @@ func _show_win(stars: int, elapsed: float) -> void:
 		if nxt < Levels.level_count():
 			Game.start_level(nxt)
 		else:
+			get_tree().paused = false
 			Game.goto_menu()
 	)
 	_add_button(win_overlay, "Қайта ойнау", _retry_level)
-	_add_button(win_overlay, "Мәзір", func(): Game.goto_menu())
+	_add_button(win_overlay, "Мәзір", func(): get_tree().paused = false; Game.goto_menu())
 	# next level text tweak
 	var next_btn: Button = vbox.get_child(vbox.get_child_count()-3) as Button
 	if level_index + 1 >= Levels.level_count():
@@ -910,7 +918,7 @@ func _show_win(stars: int, elapsed: float) -> void:
 	get_tree().paused = false
 
 func _show_lose() -> void:
-	var vbox: VBoxContainer = lose_overlay.get_child(2) as VBoxContainer
+	var vbox: VBoxContainer = lose_overlay.get_child(1) as VBoxContainer
 	var subtitle: Label = vbox.get_child(1) as Label
 	subtitle.text = "Жүректер бітті — қайтадан байқап көр!"
 	lose_overlay.visible = true

@@ -1,4 +1,6 @@
 extends Area2D
+
+const ICON = preload("res://assets/sprites/heart.png")
 ## Heart pickup — heals one heart.
 
 signal collected(pos: Vector2)
@@ -58,15 +60,4 @@ func _on_body(body: Node) -> void:
 
 
 func _draw() -> void:
-	draw_circle(Vector2(0.0, 18.0), 9.0, Color(0.0, 0.0, 0.0, 0.12))
-	_draw_heart(Vector2.ZERO, 14.0, Color("#ff5d73"))
-	draw_circle(Vector2(-4.5, -3.5), 2.0, Color(1.0, 1.0, 1.0, 0.75))
-
-
-func _draw_heart(c: Vector2, s: float, col: Color) -> void:
-	draw_circle(c + Vector2(-s * 0.45, -s * 0.18), s * 0.52, col)
-	draw_circle(c + Vector2(s * 0.45, -s * 0.18), s * 0.52, col)
-	draw_polygon(
-		PackedVector2Array([c + Vector2(-s * 0.92, s * 0.08), c + Vector2(s * 0.92, s * 0.08), c + Vector2(0.0, s * 1.05)]),
-		PackedColorArray([col])
-	)
+	draw_texture_rect(ICON, Rect2(-20, -20, 40, 40), false)

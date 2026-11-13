@@ -2,6 +2,9 @@ extends Control
 ## Heads-up display drawn procedurally: hearts, coins, timer, level name,
 ## dash cooldown. No image assets required.
 
+const HEART_ICON = preload("res://assets/sprites/heart.png")
+const COIN_ICON = preload("res://assets/sprites/coin.png")
+
 var hearts: int = 3
 var max_hearts: int = 3
 var coins: int = 0
@@ -32,20 +35,11 @@ func set_values(p_hearts: int, p_coins: int, p_coins_total: int, p_time: String,
 func _draw() -> void:
 	var font := get_theme_default_font()
 
-	# ---------------- hearts (top-left)
+	# Pixel icons use the same sprites as the pickups.
 	for i in range(max_hearts):
-		var c := Vector2(44.0 + i * 52.0, 42.0)
-		if i < hearts:
-			_draw_heart(c, 17.0, HEART_COLOR)
-		else:
-			_draw_heart(c, 17.0, HEART_EMPTY)
-
-	# ---------------- coins (top-left, under hearts)
-	var coin_c := Vector2(42.0, 100.0)
-	draw_circle(coin_c, 15.0, GOLD)
-	draw_circle(coin_c, 10.5, Color("#e8a33d"))
-	draw_circle(coin_c, 10.5, Color("#e8a33d"), false, 2.0)
-	_draw_star(coin_c, 5.0, Color("#fff3b0"))
+		var tint := Color.WHITE if i < hearts else Color(0.35, 0.3, 0.35, 0.7)
+		draw_texture_rect(HEART_ICON, Rect2(24.0 + i * 52.0, 22.0, 40.0, 40.0), false, tint)
+	draw_texture_rect(COIN_ICON, Rect2(24.0, 82.0, 36.0, 36.0), false)
 	draw_string(font, Vector2(66.0, 108.0), "%d / %d" % [coins, coins_total], HORIZONTAL_ALIGNMENT_LEFT, -1, 30, Color("#fff3b0"))
 
 	# ---------------- level name (top-center)

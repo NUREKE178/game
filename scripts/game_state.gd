@@ -102,10 +102,12 @@ func toggle_mute() -> void:
 # ---------------------------------------------------------------- flow
 func start_level(index: int) -> void:
 	current_level = index
+	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 
 
 func goto_menu() -> void:
+	get_tree().paused = false
 	get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 
 

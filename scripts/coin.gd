@@ -1,4 +1,6 @@
 extends Area2D
+
+const ICON = preload("res://assets/sprites/coin.png")
 ## Shiny coin — bobs and spins, disappears with a pop when touched.
 
 signal collected(pos: Vector2)
@@ -63,22 +65,4 @@ func _collect() -> void:
 
 
 func _draw() -> void:
-	# shadow
-	draw_circle(Vector2(0.0, 22.0), 10.0, Color(0.0, 0.0, 0.0, 0.15))
-	# outer gold
-	draw_circle(Vector2.ZERO, 16.0, Color("#e8a33d"))
-	draw_circle(Vector2.ZERO, 13.5, Color("#ffd166"))
-	draw_circle(Vector2.ZERO, 10.0, Color("#fff3b0"))
-	# inner star
-	_draw_star(Vector2.ZERO, 5.5, Color("#ffffff"))
-	# shine
-	draw_circle(Vector2(-5.0, -5.0), 2.2, Color(1.0, 1.0, 1.0, 0.7))
-
-
-func _draw_star(c: Vector2, r: float, col: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in range(10):
-		var ang := -PI / 2.0 + i * PI / 5.0
-		var rr := r if i % 2 == 0 else r * 0.45
-		pts.append(c + Vector2(cos(ang), sin(ang)) * rr)
-	draw_polygon(pts, PackedColorArray([col]))
+	draw_texture_rect(ICON, Rect2(-20, -20, 40, 40), false)

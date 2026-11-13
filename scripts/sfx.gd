@@ -74,21 +74,20 @@ func _build_all() -> void:
 	])
 
 
-func _render(notes: Array) -> AudioStreamWAV:
-	var total := 0.0
-	for n in notes:
-		total += n.dur
-	var frame_count := int(total * RATE)
+func _render(notes: Array[Note]) -> AudioStreamWAV:
+	var frame_count := 0
+	for n: Note in notes:
+		frame_count += int(n.dur * RATE)
 	var bytes := PackedByteArray()
 	bytes.resize(frame_count * 2)
 	var t := 0.0
 	var idx := 0
-	for n in notes:
+	for n: Note in notes:
 		var frames: int = int(n.dur * RATE)
 		for i in range(frames):
 			var env := 1.0 - float(i) / maxf(1.0, float(frames))
 			env = pow(env, 1.6)
-			var sample := _wave(n.shape, n.freq, t) * n.vol * env
+			var sample: float = _wave(n.shape, n.freq, t) * n.vol * env
 			var s := int(clampf(sample, -1.0, 1.0) * 32767.0)
 			bytes.encode_s16(idx * 2, s)
 			idx += 1

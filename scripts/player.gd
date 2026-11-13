@@ -45,6 +45,9 @@ var _fall_speed := 0.0
 var _blink := 0.0
 var _blink_timer := 2.5
 
+const SPIRIT = preload("res://assets/sprites/spirit.png")
+var anim_time: float = 0.0
+
 const HALF_SIZE := Vector2(21.0, 25.0)
 
 
@@ -54,6 +57,8 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
+	anim_time += delta
+	queue_redraw()
 	_blink_timer -= delta
 	if _blink_timer <= 0.0:
 		_blink = 0.12
@@ -248,74 +253,14 @@ func respawn_at(pos: Vector2) -> void:
 	modulate.a = 1.0
 
 
-# ==================================================================
-# Drawing — a fluffy little steppe spirit
-# ==================================================================
+# Four rows: idle, run, jump and dash. All frames share a 48x48 cell.
 func _draw() -> void:
-	# dash streak behind the body
+	var row := 0
 	if _dash_t > 0.0:
-		draw_circle(Vector2(-26.0 * 1.0, 0.0), 16.0, Color(1.0, 0.84, 0.4, 0.35))
-		draw_circle(Vector2(-44.0 * 1.0, 0.0), 11.0, Color(1.0, 0.84, 0.4, 0.18))
-
-	# tail curl
-	draw_circle(Vector2(-19.0, 6.0), 7.5, Color("#e8a33d"))
-	draw_circle(Vector2(-25.0, 2.0), 4.5, Color("#f7c873"))
-
-	# ears
-	draw_polygon(
-		PackedVector2Array([Vector2(-13.0, -14.0), Vector2(-19.0, -33.0), Vector2(-2.0, -19.0)]),
-		PackedColorArray([Color("#f2b54a")])
-	)
-	draw_polygon(
-		PackedVector2Array([Vector2(13.0, -14.0), Vector2(19.0, -33.0), Vector2(2.0, -19.0)]),
-		PackedColorArray([Color("#f2b54a")])
-	)
-	draw_polygon(
-		PackedVector2Array([Vector2(-12.4, -18.0), Vector2(-15.6, -28.4), Vector2(-5.4, -20.2)]),
-		PackedColorArray([Color("#ff8fa3")])
-	)
-	draw_polygon(
-		PackedVector2Array([Vector2(12.4, -18.0), Vector2(15.6, -28.4), Vector2(5.4, -20.2)]),
-		PackedColorArray([Color("#ff8fa3")])
-	)
-
-	# body
-	draw_circle(Vector2(0.0, 2.0), 22.5, Color("#f7c873"))
-	draw_circle(Vector2(0.0, -2.0), 21.0, Color("#ffd166"))
-	# belly
-	draw_circle(Vector2(0.0, 8.0), 12.5, Color("#fff3b0"))
-	# steppe ornament — turquoise diamonds on the chest
-	var diamond := PackedVector2Array([Vector2(0, -2), Vector2(4, 2), Vector2(0, 6), Vector2(-4, 2)])
-	for dx in [-7.0, 0.0, 7.0]:
-		var shifted := PackedVector2Array()
-		for p in diamond:
-			shifted.append(p + Vector2(dx, 3.0))
-		draw_polygon(shifted, PackedColorArray([Color("#2ec4b6")]))
-
-	# face
-	var eye_y := -3.0
-	if _blink > 0.0 or _dash_t > 0.0:
-		# happy closed eyes (^ ^)
-		_draw_closed_eye(Vector2(-8.5, eye_y))
-		_draw_closed_eye(Vector2(8.5, eye_y))
-	else:
-		draw_circle(Vector2(-8.5, eye_y), 3.1, Color("#2b2118"))
-		draw_circle(Vector2(8.5, eye_y), 3.1, Color("#2b2118"))
-		draw_circle(Vector2(-9.6, eye_y - 1.1), 1.0, Color("#ffffff"))
-		draw_circle(Vector2(7.4, eye_y - 1.1), 1.0, Color("#ffffff"))
-	# nose
-	draw_circle(Vector2(0.0, 2.6), 1.5, Color("#e2725b"))
-	# blush
-	draw_circle(Vector2(-13.5, 3.2), 2.6, Color(1.0, 0.45, 0.45, 0.4))
-	draw_circle(Vector2(13.5, 3.2), 2.6, Color(1.0, 0.45, 0.45, 0.4))
-
-
-func _draw_closed_eye(center: Vector2) -> void:
-	var pts := PackedVector2Array([
-		center + Vector2(-3.4, 0.8),
-		center + Vector2(-1.7, -1.6),
-		center + Vector2(0.0, 0.4),
-		center + Vector2(1.7, -1.6),
-		center + Vector2(3.4, 0.8),
-	])
-	draw_polyline(pts, Color("#2b2118"), 1.8, true)
+		row = 3
+	elif not is_on_floor():
+		row = 2
+	elif absf(velocity.x) > 40.0:
+		row = 1
+	var frame := int(anim_time * (10.0 if row == 1 else 4.0)) % 4
+	draw_texture_rect_region(SPIRIT, Rect2(-32, -38, 64, 64), Rect2(frame * 48, row * 48, 48, 48))
