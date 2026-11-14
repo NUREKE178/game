@@ -2,6 +2,7 @@ extends Node2D
 const World = preload("res://scripts/affinix/world.gd")
 const Player = preload("res://scripts/affinix/player.gd")
 const HUD = preload("res://scripts/affinix/hud.gd")
+const Atmosphere = preload("res://scripts/affinix/atmosphere.gd")
 var world: World
 var player: Player
 var hud: HUD
@@ -13,21 +14,31 @@ var rotation_step := 0
 var autosave_timer := 0.0
 var refresh_timer := 0.0
 var day_light: CanvasModulate
+var atmosphere: Node2D
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	world = World.new()
 	world.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(world)
+	var actors := Node2D.new()
+	actors.y_sort_enabled = true
+	actors.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(actors)
 	player = Player.new()
 	player.process_mode = Node.PROCESS_MODE_PAUSABLE
 	var start: Array = AffState.data.get("position", [288,320])
 	if start.size() == 2:
 		player.position = Vector2(float(start[0]), float(start[1]))
-	player.z_index = 5
 	player.step_taken.connect(func(): AffAudio.play("step"))
-	add_child(player)
+	actors.add_child(player)
 	world.hero = player
+	world.attach_visuals(actors)
+	atmosphere = Atmosphere.new()
+	atmosphere.world = world
+	atmosphere.process_mode = Node.PROCESS_MODE_PAUSABLE
+	atmosphere.z_index = 8
+	add_child(atmosphere)
 	day_light = CanvasModulate.new()
 	day_light.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(day_light)
@@ -50,6 +61,8 @@ func _process(delta: float) -> void:
 		if float(AffState.data["minute"]) >= 1440.0:
 			AffState.data["minute"] = float(AffState.data["minute"]) - 1440.0
 			AffState.data["day"] = int(AffState.data["day"]) + 1
+			world._sync_obstacles()
+			world.refresh_visuals()
 			var weathers := ["Sunny", "Wind", "Rain", "Fog", "Sunny"]
 			AffState.data["weather"] = weathers[(int(AffState.data["day"]) - 1) % weathers.size()]
 		AffState.data["hunger"] = maxf(0.0, float(AffState.data["hunger"]) - delta * 0.018)
@@ -71,16 +84,16 @@ func _process(delta: float) -> void:
 			AffState.set_flag("autumn")
 	selected = world.nearest(player.position)
 	var hour := float(AffState.data["minute"]) / 60.0
-	var darkness := 0.0
-	if hour >= 19.0:
-		darkness = clampf((hour - 19.0) / 4.0, 0, 0.45)
-	elif hour < 6.0:
-		darkness = 0.4
+	# Smooth dawn, dusk and blue nights; avoid a midnight/6 AM colour jump.
+	var night := 1.0 - smoothstep(5.0, 7.0, hour) if hour < 12.0 else smoothstep(18.0, 21.0, hour)
+	var dusk := maxf(0.0, 1.0 - absf(hour - 18.5) / 1.5)
+	var light_color := Color.WHITE.lerp(Color(0.54, 0.62, 0.80), night * 0.85)
+	light_color = light_color.lerp(Color(1.0, 0.76, 0.59), dusk * 0.35)
 	if world.region(player.position) == "Secret Underground":
-		darkness = maxf(darkness, 0.28)
+		light_color = light_color.lerp(Color(0.65, 0.68, 0.76), 0.35)
 	if AffState.amount("lantern") > 0 or _near_lamp():
-		darkness = maxf(0.0, darkness - 0.15)
-	day_light.color = Color(1.0 - darkness * 0.6, 1.0 - darkness * 0.5, 1.0 - darkness * 0.2)
+		light_color = light_color.lerp(Color.WHITE, 0.15)
+	day_light.color = light_color
 	autosave_timer += delta
 	if autosave_timer >= 30.0:
 		autosave_timer = 0.0
@@ -121,6 +134,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			rotation_step = (rotation_step + 1) % 4
 			return
 		if screen_open:
+			return
+		if event.physical_keycode >= KEY_1 and event.physical_keycode <= KEY_8 and placing < 0:
+			hud.use_hotbar(int(event.physical_keycode - KEY_1))
 			return
 		if event.physical_keycode == KEY_X and placing < 0:
 			_remove_building()
@@ -197,7 +213,7 @@ func _remove_building() -> void:
 				AffState.add_item(str(item), int(recipe["cost"][item]))
 			break
 	AffState.data["buildings"].remove_at(index)
-	world.queue_redraw()
+	world.refresh_visuals()
 	hud.notify("Structure picked up; its materials were returned.")
 
 func _interact() -> void:
@@ -213,6 +229,7 @@ func _interact() -> void:
 	if selected.is_empty():
 		return
 	var kind: String = selected["kind"]
+	player.interact_animation()
 	match kind:
 		"home": hud.open_home()
 		"npc":
@@ -226,6 +243,13 @@ func _interact() -> void:
 		"note":
 			AffState.set_flag("village_note")
 			hud.open_note("The old village", "We left a light on for the next traveler. Perhaps one day the village will be cared for again.")
+		"treasure":
+			AffState.data["depleted"][selected["id"]] = 999999
+			AffState.add_item("berry", 3)
+			AffState.add_item("wood", 2)
+			AffAudio.play("gather")
+			hud.notify("A hidden cache: 3 berries and 2 wood.")
+			world.refresh_visuals()
 		"board":
 			if AffState.data["flags"].get("restored", false):
 				hud.notify("The village notice board is repaired.")
@@ -253,10 +277,26 @@ func _gather(kind: String) -> void:
 	AffState.add_item(item, count)
 	AffState.data["depleted"][selected["id"]] = int(AffState.data["day"]) + 2
 	world._sync_obstacles()
+	world.refresh_visuals()
+	_float_pickup("+%d %s" % [count, AffState.ITEM_NAMES.get(item, item)])
 	AffState.data["energy"] = maxf(0.0, float(AffState.data["energy"]) - 0.8)
 	AffAudio.play("gather")
 	hud.notify("Collected %d %s." % [count, AffState.ITEM_NAMES.get(item, item)])
 	world.queue_redraw()
+
+func _float_pickup(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	label.position = player.position + Vector2(-28, -42)
+	label.z_index = 9
+	label.add_theme_font_size_override("font_size", 9)
+	label.add_theme_color_override("font_color", Color("#fff3be"))
+	add_child(label)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "position:y", label.position.y - 18, 0.8)
+	tween.tween_property(label, "modulate:a", 0.0, 0.8)
+	tween.chain().tween_callback(label.queue_free)
 
 func _save() -> bool:
 	AffState.data["position"] = [player.position.x, player.position.y]

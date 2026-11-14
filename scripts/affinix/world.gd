@@ -1,4 +1,5 @@
 extends Node2D
+const Visual = preload("res://scripts/affinix/world_visual.gd")
 ## Six fixed regions with authored landmarks and deterministic resource placement.
 const CELL := 16
 const WIDTH := 120
@@ -27,11 +28,27 @@ var animals: Array[Dictionary] = []
 var time := 0.0
 var hero: CharacterBody2D
 var obstacles: Dictionary = {}
+var visuals: Dictionary = {}
+var visual_root: Node2D
+var building_root: Node2D
+var building_signature := ""
+var redraw_timer := 0.0
+const TILESETS := {
+	"Whispering Forest": [preload("res://assets/affinix/forest_0.png"),preload("res://assets/affinix/forest_1.png"),preload("res://assets/affinix/forest_2.png"),preload("res://assets/affinix/forest_3.png")],
+	"Crystal Lake": [preload("res://assets/affinix/forest_0.png"),preload("res://assets/affinix/forest_1.png"),preload("res://assets/affinix/forest_2.png"),preload("res://assets/affinix/forest_3.png")],
+	"Autumn Valley": [preload("res://assets/affinix/autumn2_0.png"),preload("res://assets/affinix/autumn2_1.png"),preload("res://assets/affinix/autumn2_2.png"),preload("res://assets/affinix/autumn2_3.png")],
+	"Forgotten Village": [preload("res://assets/affinix/village2_0.png"),preload("res://assets/affinix/village2_1.png"),preload("res://assets/affinix/village2_2.png"),preload("res://assets/affinix/village2_3.png")],
+	"Secret Underground": [preload("res://assets/affinix/cave2_0.png"),preload("res://assets/affinix/cave2_1.png"),preload("res://assets/affinix/cave2_2.png"),preload("res://assets/affinix/cave2_3.png")],
+	"Misty Mountains": [preload("res://assets/affinix/mountain2_0.png"),preload("res://assets/affinix/mountain2_1.png"),preload("res://assets/affinix/mountain2_2.png"),preload("res://assets/affinix/mountain2_3.png")],
+}
+const PATH_TILES = [preload("res://assets/affinix/path_0.png"),preload("res://assets/affinix/path_1.png"),preload("res://assets/affinix/path_2.png"),preload("res://assets/affinix/path_3.png")]
+const WATER_TILES = [preload("res://assets/affinix/lake_0.png"),preload("res://assets/affinix/lake_1.png"),preload("res://assets/affinix/lake_2.png"),preload("res://assets/affinix/lake_3.png")]
 
 func _ready() -> void:
 	build_map()
 	AffState.changed.connect(queue_redraw)
 	AffState.changed.connect(_sync_obstacles)
+	AffState.changed.connect(refresh_visuals)
 
 func region(pos: Vector2) -> String:
 	var col := clampi(floori(pos.x / (40.0 * CELL)), 0, 2)
@@ -89,6 +106,15 @@ func build_map() -> void:
 			elif roll < 0.63:
 				kind = "herb"
 			add_obj("cell_%d_%d" % [x, y], kind, x, y)
+	# Move after distribution so existing procedural IDs and kinds stay unchanged.
+	for o in objects:
+		if str(o["id"]).begins_with("cell_"):
+			var cell: Vector2 = o["pos"] / CELL
+			var jx := float(posmod(int(cell.x) * 19 + int(cell.y) * 7, 7)) - 3.0
+			var jy := float(posmod(int(cell.x) * 11 + int(cell.y) * 13, 7)) - 3.0
+			o["pos"] += Vector2(jx, jy)
+	add_obj("hidden_cache_1", "treasure", 11, 68)
+	add_obj("hidden_cache_2", "treasure", 109, 25)
 	for i in range(12):
 		animals.append({"origin":Vector2(rng.randf_range(40, 1800), rng.randf_range(40, 1200)), "kind":["rabbit", "fox", "bird"][i % 3], "phase":rng.randf_range(0, TAU)})
 	_build_collision()
@@ -159,80 +185,76 @@ func nearest(pos: Vector2) -> Dictionary:
 			result = o
 	return result
 
+func attach_visuals(root: Node2D) -> void:
+	visual_root = root
+	for o in objects:
+		var sprite := Visual.new()
+		sprite.setup(o, self)
+		root.add_child(sprite)
+		visuals[o["id"]] = sprite
+	# Small decorative plants are deliberately non-interactive, not invisible resources.
+	for i in range(200):
+		var x := 22 + posmod(i * 137 + i * i * 17, 1870)
+		var y := 22 + posmod(i * 211 + i * i * 7, 1230)
+		var p := Vector2(x, y)
+		if is_water(p):
+			continue
+		var flower := Visual.new()
+		flower.setup({"id": "flower_%d" % i, "kind": "flower", "pos": p}, self)
+		root.add_child(flower)
+	for data in animals:
+		var animal := Visual.new()
+		animal.setup(data, self, false, true)
+		root.add_child(animal)
+	# Buildings must share the same y-sort parent as characters and foliage.
+	refresh_visuals()
+
+func refresh_visuals() -> void:
+	if not is_instance_valid(visual_root):
+		return
+	for o in objects:
+		var item: Node2D = visuals.get(o["id"])
+		if is_instance_valid(item):
+			item.visible = active(o)
+	var signature := JSON.stringify(AffState.data["buildings"])
+	if signature == building_signature:
+		return
+	building_signature = signature
+	for child in visual_root.get_children():
+		if child.has_meta("aff_building"):
+			visual_root.remove_child(child)
+			child.queue_free()
+	for building in AffState.data["buildings"]:
+		var sprite := Visual.new()
+		var descriptor: Dictionary = building.duplicate()
+		descriptor["pos"] = Vector2(float(building["x"]), float(building["y"]))
+		sprite.setup(descriptor, self, true)
+		sprite.set_meta("aff_building", true)
+		visual_root.add_child(sprite)
+
 func _process(delta: float) -> void:
 	time += delta
-	queue_redraw()
+	redraw_timer += delta
+	if redraw_timer >= 0.10:
+		redraw_timer = 0.0
+		queue_redraw()
 
 func _draw() -> void:
 	var camera := get_viewport().get_camera_2d()
 	var center := camera.get_screen_center_position() if camera else Vector2(288,320)
-	var left := maxi(0, floori((center.x - 350) / CELL))
-	var right := mini(WIDTH, ceili((center.x + 350) / CELL))
-	var top := maxi(0, floori((center.y - 200) / CELL))
-	var bottom := mini(HEIGHT, ceili((center.y + 200) / CELL))
+	var left := maxi(0, floori((center.x - 360) / CELL))
+	var right := mini(WIDTH, ceili((center.x + 360) / CELL))
+	var top := maxi(0, floori((center.y - 210) / CELL))
+	var bottom := mini(HEIGHT, ceili((center.y + 210) / CELL))
 	for y in range(top, bottom):
 		for x in range(left, right):
 			var p := Vector2(x * CELL, y * CELL)
-			var biome := region(p)
-			var texture: Texture2D = GRASS
-			match biome:
-				"Autumn Valley": texture = AUTUMN
-				"Forgotten Village": texture = VILLAGE
-				"Secret Underground": texture = CAVE
-				"Misty Mountains": texture = MOUNTAIN
+			var variant := posmod(x * 31 + y * 17 + x * y * 7, 4)
+			var tiles: Array = TILESETS[region(p)]
+			var texture: Texture2D = tiles[variant]
+			var on_path := absi(y - 20) <= 1 or absi(y - 60) <= 1 or absi(x - 20) <= 1 or absi(x - 60) <= 1 or absi(x - 100) <= 1
+			if on_path:
+				texture = PATH_TILES[variant]
 			if is_water(p + Vector2(8, 8)):
-				texture = WATER
+				texture = WATER_TILES[(variant + int(time * 0.6)) % 4]
 			draw_texture_rect(texture, Rect2(p, Vector2(CELL, CELL)), false)
-			if (x * 31 + y * 17) % 23 == 0 and texture != WATER:
-				draw_rect(Rect2(p + Vector2(5, 6), Vector2(2, 2)), Color("#d7d4aa"))
-	# Village landmarks and resources.
-	for o in objects:
-		if not active(o):
-			continue
-		var p: Vector2 = o["pos"]
-		if absf(p.x - center.x) > 390 or absf(p.y - center.y) > 245:
-			continue
-		match o["kind"]:
-			"home": draw_texture_rect(CABIN, Rect2(p + Vector2(-40,-56), Vector2(80,64)), false)
-			"tree": draw_texture_rect(DARK_TREE if region(p) == "Autumn Valley" else TREE, Rect2(p + Vector2(-24,-54), Vector2(48,60)), false)
-			"stone", "mineral", "crystal": draw_texture_rect(ROCK, Rect2(p + Vector2(-12,-15), Vector2(24,18)), false, Color("#c5c8ee") if o["kind"] == "crystal" else Color.WHITE)
-			"berry": draw_texture_rect(BERRY, Rect2(p + Vector2(-12,-16), Vector2(24,18)), false)
-			"mushroom": draw_texture_rect(MUSHROOM, Rect2(p + Vector2(-8,-14), Vector2(16,16)), false)
-			"npc": draw_texture_rect(NPC, Rect2(p + Vector2(-12,-27), Vector2(24,30)), false)
-			"branch": draw_line(p + Vector2(-6,-2), p + Vector2(6,-4), Color("#5f4939"), 3.0)
-			"leaves", "herb": draw_texture_rect(BERRY, Rect2(p + Vector2(-8,-12), Vector2(16,14)), false, Color("#b0dba5"))
-			"note", "board": draw_texture_rect(CHEST, Rect2(p + Vector2(-12,-16), Vector2(24,18)), false)
-	for building in AffState.data["buildings"]:
-		var p := Vector2(float(building["x"]), float(building["y"]))
-		var kind: String = building["id"]
-		if kind == "campfire":
-			draw_texture_rect(FIRE, Rect2(p + Vector2(-10,-16), Vector2(20,18)), false)
-		elif kind == "chest":
-			draw_texture_rect(CHEST, Rect2(p + Vector2(-12,-17), Vector2(24,18)), false)
-		elif kind == "tent":
-			draw_colored_polygon(PackedVector2Array([p + Vector2(-14,0),p + Vector2(0,-22),p + Vector2(14,0)]), Color("#d4c49e"))
-			draw_line(p + Vector2(0,-22), p, Color("#5d5444"), 2)
-		else:
-			var direction := Vector2(9, 0).rotated(float(building.get("rotation", 0)) * PI / 2.0)
-			draw_line(p - direction, p + direction, Color("#c1a276"), 3)
-	for animal in animals:
-		var p: Vector2 = animal["origin"] + Vector2(sin(time * 0.5 + float(animal["phase"])) * 8, cos(time * 0.4 + float(animal["phase"])) * 5)
-		if hero and p.distance_to(hero.position) < 40:
-			p += (p - hero.position).normalized() * 10
-		var tex: Texture2D = RABBIT if animal["kind"] == "rabbit" else FOX if animal["kind"] == "fox" else BIRD
-		draw_texture_rect(tex, Rect2(p + Vector2(-8,-12), Vector2(16,16)), false)
-
-	var weather: String = str(AffState.data["weather"])
-	if weather == "Rain":
-		for i in range(45):
-			var x := fposmod(i * 73.0 + time * 40.0, 700.0) + center.x - 350.0
-			var y := fposmod(i * 59.0 + time * 100.0, 400.0) + center.y - 200.0
-			draw_line(Vector2(x, y), Vector2(x - 2, y + 6), Color(0.8, 0.9, 0.9, 0.5), 1.0)
-	if weather == "Fog":
-		draw_rect(Rect2(center - Vector2(350, 200), Vector2(700,400)), Color(0.85,0.9,0.86,0.14))
-
-	if region(center) == "Misty Mountains" and weather in ["Rain", "Wind"]:
-		for i in range(32):
-			var x := fposmod(i * 61.0 + time * 8.0, 700.0) + center.x - 350.0
-			var y := fposmod(i * 83.0 + time * 18.0, 400.0) + center.y - 200.0
-			draw_circle(Vector2(x, y), 1.0, Color(0.95, 0.98, 1, 0.8))
