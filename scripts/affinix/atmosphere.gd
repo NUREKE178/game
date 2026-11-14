@@ -17,7 +17,7 @@ func _draw() -> void:
 			var y := fposmod(i * 59.0 + clock * 100.0, 400.0) + center.y - 200.0
 			draw_line(Vector2(x, y), Vector2(x - 2, y + 6), Color(0.8, 0.9, 0.9, 0.5), 1.0)
 	if weather == "Fog":
-		draw_rect(Rect2(center - Vector2(350, 200), Vector2(700,400)), Color(0.85,0.9,0.86,0.12))
+		draw_rect(Rect2(center - Vector2(350, 200), Vector2(700,400)), Color(0.85,0.9,0.86,0.05))
 	if world.region(center) == "Misty Mountains" and weather in ["Rain", "Wind"]:
 		for i in range(32):
 			var x := fposmod(i * 61.0 + clock * 8.0, 700.0) + center.x - 350.0

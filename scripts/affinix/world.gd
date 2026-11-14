@@ -1,50 +1,23 @@
 extends Node2D
 const Visual = preload("res://scripts/affinix/world_visual.gd")
+const Terrain = preload("res://scripts/affinix/terrain.gd")
 ## Six fixed regions with authored landmarks and deterministic resource placement.
 const CELL := 16
 const WIDTH := 120
 const HEIGHT := 80
-const GRASS = preload("res://assets/affinix/grass.png")
-const WATER = preload("res://assets/affinix/water.png")
-const AUTUMN = preload("res://assets/affinix/autumn.png")
-const VILLAGE = preload("res://assets/affinix/village.png")
-const CAVE = preload("res://assets/affinix/cave.png")
-const MOUNTAIN = preload("res://assets/affinix/mountain.png")
-const TREE = preload("res://assets/affinix/tree.png")
-const DARK_TREE = preload("res://assets/affinix/dark_tree.png")
-const CABIN = preload("res://assets/affinix/cabin.png")
-const ROCK = preload("res://assets/affinix/rock.png")
-const BERRY = preload("res://assets/affinix/berry_bush.png")
-const MUSHROOM = preload("res://assets/affinix/mushroom.png")
-const NPC = preload("res://assets/affinix/npc.png")
-const FIRE = preload("res://assets/affinix/campfire.png")
-const CHEST = preload("res://assets/affinix/chest.png")
-const RABBIT = preload("res://assets/affinix/rabbit.png")
-const FOX = preload("res://assets/affinix/fox.png")
-const BIRD = preload("res://assets/affinix/bird.png")
 const REGIONS := ["Whispering Forest", "Crystal Lake", "Autumn Valley", "Forgotten Village", "Secret Underground", "Misty Mountains"]
 var objects: Array[Dictionary] = []
 var animals: Array[Dictionary] = []
-var time := 0.0
 var hero: CharacterBody2D
 var obstacles: Dictionary = {}
 var visuals: Dictionary = {}
 var visual_root: Node2D
-var building_root: Node2D
 var building_signature := ""
-var redraw_timer := 0.0
-const TILESETS := {
-	"Whispering Forest": [preload("res://assets/affinix/forest_0.png"),preload("res://assets/affinix/forest_1.png"),preload("res://assets/affinix/forest_2.png"),preload("res://assets/affinix/forest_3.png")],
-	"Crystal Lake": [preload("res://assets/affinix/forest_0.png"),preload("res://assets/affinix/forest_1.png"),preload("res://assets/affinix/forest_2.png"),preload("res://assets/affinix/forest_3.png")],
-	"Autumn Valley": [preload("res://assets/affinix/autumn2_0.png"),preload("res://assets/affinix/autumn2_1.png"),preload("res://assets/affinix/autumn2_2.png"),preload("res://assets/affinix/autumn2_3.png")],
-	"Forgotten Village": [preload("res://assets/affinix/village2_0.png"),preload("res://assets/affinix/village2_1.png"),preload("res://assets/affinix/village2_2.png"),preload("res://assets/affinix/village2_3.png")],
-	"Secret Underground": [preload("res://assets/affinix/cave2_0.png"),preload("res://assets/affinix/cave2_1.png"),preload("res://assets/affinix/cave2_2.png"),preload("res://assets/affinix/cave2_3.png")],
-	"Misty Mountains": [preload("res://assets/affinix/mountain2_0.png"),preload("res://assets/affinix/mountain2_1.png"),preload("res://assets/affinix/mountain2_2.png"),preload("res://assets/affinix/mountain2_3.png")],
-}
-const PATH_TILES = [preload("res://assets/affinix/path_0.png"),preload("res://assets/affinix/path_1.png"),preload("res://assets/affinix/path_2.png"),preload("res://assets/affinix/path_3.png")]
-const WATER_TILES = [preload("res://assets/affinix/lake_0.png"),preload("res://assets/affinix/lake_1.png"),preload("res://assets/affinix/lake_2.png"),preload("res://assets/affinix/lake_3.png")]
 
 func _ready() -> void:
+	var ground := Terrain.new()
+	ground.name = "Terrain"
+	add_child(ground)
 	build_map()
 	AffState.changed.connect(queue_redraw)
 	AffState.changed.connect(_sync_obstacles)
@@ -124,21 +97,17 @@ func _build_collision() -> void:
 	body.collision_layer = 1
 	body.collision_mask = 0
 	add_child(body)
-	# Merge horizontal runs of lake cells into a small number of shapes.
-	for y in range(10, 31):
-		var start := -1
-		for x in range(48, 76):
-			var water := is_water(Vector2((x + 0.5) * CELL, (y + 0.5) * CELL))
-			if water and start < 0:
-				start = x
-			if not water and start >= 0:
-				var shape := RectangleShape2D.new()
-				shape.size = Vector2((x - start) * CELL, CELL)
-				var col := CollisionShape2D.new()
-				col.position = Vector2((start + x) * CELL * 0.5, (y + 0.5) * CELL)
-				col.shape = shape
-				body.add_child(col)
-				start = -1
+	# A convex ellipse follows the lake instead of stair-stepped collision rectangles.
+	var water_shape := ConvexPolygonShape2D.new()
+	var points := PackedVector2Array()
+	for i in range(64):
+		var angle := TAU * float(i) / 64.0
+		points.append(Vector2(cos(angle) * 160.0, sin(angle) * 128.0))
+	water_shape.points = points
+	var water_collision := CollisionShape2D.new()
+	water_collision.position = Vector2(992, 320)
+	water_collision.shape = water_shape
+	body.add_child(water_collision)
 	for o in objects:
 		if o["kind"] != "tree":
 			continue
@@ -202,6 +171,22 @@ func attach_visuals(root: Node2D) -> void:
 		var flower := Visual.new()
 		flower.setup({"id": "flower_%d" % i, "kind": "flower", "pos": p}, self)
 		root.add_child(flower)
+	for i in range(24):
+		var angle := TAU * float(i) / 24.0
+		var p := Vector2(992 + cos(angle) * 173, 320 + sin(angle) * 139)
+		if p.distance_to(Vector2(816, 320)) < 40:
+			continue
+		var reed := Visual.new()
+		reed.setup({"id":"reed_%d" % i, "kind":"reed", "pos":p}, self)
+		root.add_child(reed)
+	for i in range(7):
+		var angle := TAU * (float(i) + 0.5) / 7.0
+		var p := Vector2(992 + cos(angle) * 180, 320 + sin(angle) * 148)
+		if p.distance_to(Vector2(816, 320)) < 40:
+			continue
+		var shore_rock := Visual.new()
+		shore_rock.setup({"id":"shore_rock_%d" % i, "kind":"stone", "pos":p}, self)
+		root.add_child(shore_rock)
 	for data in animals:
 		var animal := Visual.new()
 		animal.setup(data, self, false, true)
@@ -231,30 +216,3 @@ func refresh_visuals() -> void:
 		sprite.setup(descriptor, self, true)
 		sprite.set_meta("aff_building", true)
 		visual_root.add_child(sprite)
-
-func _process(delta: float) -> void:
-	time += delta
-	redraw_timer += delta
-	if redraw_timer >= 0.10:
-		redraw_timer = 0.0
-		queue_redraw()
-
-func _draw() -> void:
-	var camera := get_viewport().get_camera_2d()
-	var center := camera.get_screen_center_position() if camera else Vector2(288,320)
-	var left := maxi(0, floori((center.x - 360) / CELL))
-	var right := mini(WIDTH, ceili((center.x + 360) / CELL))
-	var top := maxi(0, floori((center.y - 210) / CELL))
-	var bottom := mini(HEIGHT, ceili((center.y + 210) / CELL))
-	for y in range(top, bottom):
-		for x in range(left, right):
-			var p := Vector2(x * CELL, y * CELL)
-			var variant := posmod(x * 31 + y * 17 + x * y * 7, 4)
-			var tiles: Array = TILESETS[region(p)]
-			var texture: Texture2D = tiles[variant]
-			var on_path := absi(y - 20) <= 1 or absi(y - 60) <= 1 or absi(x - 20) <= 1 or absi(x - 60) <= 1 or absi(x - 100) <= 1
-			if on_path:
-				texture = PATH_TILES[variant]
-			if is_water(p + Vector2(8, 8)):
-				texture = WATER_TILES[(variant + int(time * 0.6)) % 4]
-			draw_texture_rect(texture, Rect2(p, Vector2(CELL, CELL)), false)

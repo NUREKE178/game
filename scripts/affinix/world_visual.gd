@@ -2,6 +2,8 @@ extends Node2D
 ## One grounded drawable per object so the scene tree can y-sort against Chill Boy.
 const TREE = preload("res://assets/affinix/tree.png")
 const PINE = preload("res://assets/affinix/pine.png")
+const PINE_SMALL = preload("res://assets/affinix/pine_small.png")
+const TREE_SMALL = preload("res://assets/affinix/tree_small.png")
 const GOLD = preload("res://assets/affinix/golden_tree.png")
 const CABIN = preload("res://assets/affinix/cabin.png")
 const ROCK = preload("res://assets/affinix/rock.png")
@@ -13,6 +15,10 @@ const CHEST = preload("res://assets/affinix/chest.png")
 const RABBIT = preload("res://assets/affinix/rabbit.png")
 const FOX = preload("res://assets/affinix/fox.png")
 const BIRD = preload("res://assets/affinix/bird.png")
+const LOG = preload("res://assets/affinix/fallen_log.png")
+const HERB = preload("res://assets/affinix/herb.png")
+const LEAVES = preload("res://assets/affinix/leaf_pile.png")
+const REEDS = [preload("res://assets/affinix/reeds_0.png"), preload("res://assets/affinix/reeds_1.png"), preload("res://assets/affinix/reeds_2.png")]
 const FLOWERS = [preload("res://assets/affinix/wildflower_cream.png"), preload("res://assets/affinix/wildflower_pink.png"), preload("res://assets/affinix/wildflower_blue.png"), preload("res://assets/affinix/grass_tuft.png")]
 var info: Dictionary = {}
 var map
@@ -32,7 +38,7 @@ func setup(source: Dictionary, parent_world, building: bool = false, animal: boo
 	variant = absi(hash(str(info.get("id", position)))) % 4
 
 func _ready() -> void:
-	set_process(is_animal or info.get("kind", "") == "tree")
+	set_process(is_animal or info.get("kind", "") in ["tree", "flower", "reed"])
 	if is_building and info.get("id", "") in ["campfire", "lamp"]:
 		_add_light()
 
@@ -63,8 +69,8 @@ func _process(delta: float) -> void:
 		if is_instance_valid(map.hero) and desired.distance_to(map.hero.position) < 40:
 			desired += (desired - map.hero.position).normalized() * 10
 		position = desired
-	if info.get("kind", "") == "tree":
-		rotation = sin(animation_time * 0.8 + variant * 2.0) * 0.009
+	if info.get("kind", "") in ["tree", "flower", "reed"]:
+		rotation = sin(animation_time * 0.8 + variant * 2.0) * (0.009 if info.get("kind", "") == "tree" else 0.025)
 
 func _draw() -> void:
 	var kind: String = str(info.get("kind", info.get("id", "")))
@@ -85,17 +91,18 @@ func _draw() -> void:
 			draw_arc(Vector2(0, -2), 7, 0, TAU, 16, Color(0.85, 0.95, 0.89, 0.7), 1.0)
 		"home": draw_texture_rect(CABIN, Rect2(-40,-56,80,64), false)
 		"tree":
-			var tree: Texture2D = GOLD if map.region(position) == "Autumn Valley" else PINE if variant == 0 else TREE
-			var h := 64.0 if tree == PINE or tree == GOLD else 60.0
-			var size_factor := 0.9 + 0.07 * float(variant)
-			draw_texture_rect(tree, Rect2(-24 * size_factor, -h * size_factor + 5, 48 * size_factor, h * size_factor), false)
+			var tree: Texture2D = GOLD if map.region(position) == "Autumn Valley" else PINE_SMALL if variant == 0 else PINE if variant == 1 else TREE_SMALL if variant == 2 else TREE
+			var size := tree.get_size()
+			draw_texture_rect(tree, Rect2(-size.x / 2.0, -size.y + 5.0, size.x, size.y), false)
 		"stone", "mineral", "crystal": draw_texture_rect(ROCK, Rect2(-12,-15,24,18), false, Color("#c5c8ee") if kind == "crystal" else Color.WHITE)
 		"berry": draw_texture_rect(BERRY, Rect2(-12,-16,24,18), false)
 		"mushroom": draw_texture_rect(MUSHROOM, Rect2(-8,-14,16,16), false)
 		"npc": draw_texture_rect(NPC, Rect2(-12,-27,24,30), false)
-		"branch": draw_line(Vector2(-6,-2), Vector2(6,-4), Color("#5f4939"), 3.0)
-		"leaves", "herb": draw_texture_rect(BERRY, Rect2(-8,-12,16,14), false, Color("#b0dba5"))
+		"branch": draw_texture_rect(LOG, Rect2(-8,-14,16,16), false)
+		"herb": draw_texture_rect(HERB, Rect2(-8,-14,16,16), false)
+		"leaves": draw_texture_rect(LEAVES, Rect2(-8,-14,16,16), false)
 		"note", "board", "treasure": draw_texture_rect(CHEST, Rect2(-12,-16,24,18), false)
+		"reed": draw_texture_rect(REEDS[variant % 3], Rect2(-8,-19,16,20), false)
 		"flower": draw_texture_rect(FLOWERS[variant], Rect2(-8,-15,16,18), false)
 
 func _draw_building(kind: String) -> void:

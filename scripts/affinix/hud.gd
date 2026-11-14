@@ -15,10 +15,12 @@ var bars: Dictionary = {}
 var hotbar_buttons: Array[Button] = []
 var location: Label
 var weather_icon: TextureRect
-var quest: Label
+var selected_slot := 0
+var overlay_tween: Tween
 var prompt: Label
 var notice: Label
 var notice_timer := 0.0
+var notice_queue: Array[String] = []
 var overlay: Control
 var box: VBoxContainer
 var fishing := false
@@ -33,111 +35,129 @@ func _ready() -> void:
 	_build_overlay()
 	AffState.changed.connect(refresh)
 
+func _hud_style(color: Color, border: Color, margin: int = 5) -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.bg_color = color
+	style.border_color = border
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(3)
+	style.set_content_margin_all(margin)
+	return style
+
 func _build_hud() -> void:
 	var panel := PanelContainer.new()
-	panel.position = Vector2(24, 24)
-	panel.custom_minimum_size = Vector2(470, 0)
-	panel.add_theme_stylebox_override("panel", STYLE.panel(Color(0.10,0.17,0.13,0.94)))
+	panel.position = Vector2(18, 18)
+	panel.add_theme_stylebox_override("panel", _hud_style(Color(0.07,0.13,0.10,0.83), Color(0.52,0.61,0.49,0.55), 7))
 	add_child(panel)
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 7)
+	v.add_theme_constant_override("separation", 4)
 	panel.add_child(v)
+	var colors := {"health":Color("#d37c72"), "hunger":Color("#dbb279"), "energy":Color("#a3be80"), "temperature":Color("#85b2bc")}
+	for id in ["health", "hunger", "energy", "temperature"]:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 5)
+		v.add_child(row)
+		var icon := TextureRect.new()
+		icon.texture = ICONS[id]
+		icon.custom_minimum_size = Vector2(18,18)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(icon)
+		var bar := ProgressBar.new()
+		bar.custom_minimum_size = Vector2(112, 8)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		bar.show_percentage = false
+		bar.add_theme_stylebox_override("background", _hud_style(Color("#26382d"), Color.TRANSPARENT, 0))
+		bar.add_theme_stylebox_override("fill", _hud_style(colors[id], Color.TRANSPARENT, 0))
+		row.add_child(bar)
+		bars[id] = bar
+	var clock_panel := PanelContainer.new()
+	clock_panel.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	clock_panel.offset_left = -185
+	clock_panel.offset_right = 185
+	clock_panel.offset_top = 18
+	clock_panel.add_theme_stylebox_override("panel", _hud_style(Color(0.07,0.13,0.10,0.83), Color(0.52,0.61,0.49,0.55), 7))
+	add_child(clock_panel)
 	var title_row := HBoxContainer.new()
-	v.add_child(title_row)
+	title_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	title_row.add_theme_constant_override("separation", 7)
+	clock_panel.add_child(title_row)
 	weather_icon = TextureRect.new()
-	weather_icon.custom_minimum_size = Vector2(24, 24)
+	weather_icon.custom_minimum_size = Vector2(20,20)
 	weather_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	weather_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	title_row.add_child(weather_icon)
-	location = STYLE.label("", 19)
+	location = STYLE.label("", 15)
 	location.add_theme_font_override("font", STYLE.BOLD)
 	title_row.add_child(location)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
-	v.add_child(row)
-	var colors := {"health":Color("#dc8277"), "hunger":Color("#e6ba6f"), "energy":Color("#a4c77e"), "temperature":Color("#8ebcc7")}
-	for id in ["health", "hunger", "energy", "temperature"]:
-		var col := VBoxContainer.new()
-		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.add_child(col)
-		var heading := HBoxContainer.new()
-		col.add_child(heading)
-		var icon := TextureRect.new()
-		icon.texture = ICONS[id]
-		icon.custom_minimum_size = Vector2(22, 22)
-		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		heading.add_child(icon)
-		var name := STYLE.label(" " + ("Warmth" if id == "temperature" else id.capitalize()), 13)
-		heading.add_child(name)
-		var bar := ProgressBar.new()
-		bar.custom_minimum_size = Vector2(90, 8)
-		bar.show_percentage = false
-		var background := StyleBoxFlat.new()
-		background.bg_color = Color("#27382e")
-		background.set_corner_radius_all(3)
-		var fill := StyleBoxFlat.new()
-		fill.bg_color = colors[id]
-		fill.set_corner_radius_all(3)
-		bar.add_theme_stylebox_override("background", background)
-		bar.add_theme_stylebox_override("fill", fill)
-		col.add_child(bar)
-		bars[id] = bar
-	quest = STYLE.label("", 14)
-	quest.add_theme_color_override("font_color", Color("#d8cb99"))
-	v.add_child(quest)
-	prompt = STYLE.label("", 18)
+	prompt = STYLE.label("", 16)
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	prompt.offset_left = -400
-	prompt.offset_right = 400
-	prompt.offset_top = -175
-	prompt.offset_bottom = -145
+	prompt.offset_left = -360
+	prompt.offset_right = 360
+	prompt.offset_top = -124
+	prompt.offset_bottom = -100
 	add_child(prompt)
 	var slots := HBoxContainer.new()
 	slots.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	slots.offset_left = -312
-	slots.offset_right = 312
-	slots.offset_top = -118
-	slots.offset_bottom = -47
+	slots.offset_left = -241
+	slots.offset_right = 241
+	slots.offset_top = -87
+	slots.offset_bottom = -30
 	slots.add_theme_constant_override("separation", 5)
 	slots.mouse_filter = Control.MOUSE_FILTER_PASS
 	add_child(slots)
 	for i in range(HOTBAR.size()):
 		var item: String = HOTBAR[i]
 		var button := Button.new()
-		STYLE.button(button)
-		button.custom_minimum_size = Vector2(73, 66)
+		button.custom_minimum_size = Vector2(55, 54)
 		button.icon = ICONS[item]
 		button.expand_icon = true
 		button.alignment = HORIZONTAL_ALIGNMENT_CENTER
-		button.add_theme_font_size_override("font_size", 12)
+		button.add_theme_font_override("font", STYLE.BOLD)
+		button.add_theme_font_size_override("font_size", 11)
+		button.add_theme_color_override("font_color", Color("#f3eedc"))
 		button.tooltip_text = "%d · %s. %s" % [i + 1, AffState.ITEM_NAMES[item], "Eat" if item in ["berry", "meal"] else "Tools work automatically when carried" if item in ["axe", "pickaxe", "rod", "lantern"] else "Open bag"]
 		var index := i
 		button.pressed.connect(func(): use_hotbar(index))
 		slots.add_child(button)
 		hotbar_buttons.append(button)
-	var help := STYLE.label("WASD move  ·  Shift run  ·  E interact  ·  I bag  ·  C craft  ·  J journal  ·  M map  ·  Esc pause", 13)
+	_update_slot_styles()
+	var help := STYLE.label("E interact   ·   I bag   ·   C craft   ·   J journal   ·   Esc pause", 12)
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-	help.offset_left = -550
-	help.offset_right = 550
-	help.offset_top = -30
-	help.offset_bottom = -6
+	help.offset_left = -360
+	help.offset_right = 360
+	help.offset_top = -25
+	help.offset_bottom = -4
 	add_child(help)
 	notice = STYLE.label("", 16)
 	notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	notice.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	notice.offset_left = -400
 	notice.offset_right = 400
-	notice.offset_top = -210
-	notice.offset_bottom = -180
+	notice.offset_top = -157
+	notice.offset_bottom = -132
 	notice.z_index = 30
 	add_child(notice)
+
+func _update_slot_styles() -> void:
+	for i in range(hotbar_buttons.size()):
+		var selected := i == selected_slot
+		var b := hotbar_buttons[i]
+		b.add_theme_stylebox_override("normal", _hud_style(Color(0.17,0.25,0.17,0.96) if selected else Color(0.07,0.13,0.10,0.86), Color("#e4d5a4") if selected else Color("#637661"), 3))
+		b.add_theme_stylebox_override("hover", _hud_style(Color("#47644c"), Color("#e4d5a4"), 3))
+		b.add_theme_stylebox_override("pressed", _hud_style(Color("#344b39"), Color("#e4d5a4"), 3))
+		b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 func use_hotbar(index: int) -> void:
 	if game.paused or game.screen_open or game.placing >= 0 or index < 0 or index >= HOTBAR.size():
 		return
+	selected_slot = index
+	_update_slot_styles()
+	var button := hotbar_buttons[index]
+	button.modulate = Color(1.35, 1.35, 1.15)
+	create_tween().tween_property(button, "modulate", Color.WHITE, 0.20)
 	var item: String = HOTBAR[index]
 	if item in ["berry", "meal"]:
 		if AffState.amount(item) > 0:
@@ -179,7 +199,14 @@ func _open(title: String) -> void:
 	var heading := STYLE.label(title, 28)
 	heading.add_theme_font_override("font", STYLE.BOLD)
 	box.add_child(heading)
+	var was_visible := overlay.visible
 	overlay.visible = true
+	if not was_visible:
+		if overlay_tween:
+			overlay_tween.kill()
+		overlay.modulate.a = 0.0
+		overlay_tween = create_tween()
+		overlay_tween.tween_property(overlay, "modulate:a", 1.0, 0.16)
 	game.set_screen(true)
 
 func _text(text: String, size: int = 16) -> void:
@@ -197,6 +224,10 @@ func _button(text: String, callback: Callable, enabled: bool = true) -> void:
 
 func close_screen() -> void:
 	fishing = false
+	game.player.fishing = false
+	if overlay_tween:
+		overlay_tween.kill()
+	overlay.modulate.a = 1.0
 	overlay.visible = false
 	game.set_screen(false)
 	if game.paused:
@@ -395,6 +426,7 @@ func open_map() -> void:
 
 func open_fishing() -> void:
 	_open("Crystal Lake")
+	game.player.fishing = true
 	_text("Press Reel in while the marker is in the middle.")
 	fish_marker = ProgressBar.new()
 	fish_marker.custom_minimum_size.y = 24
@@ -449,14 +481,13 @@ func refresh() -> void:
 	var hour := int(float(data["minute"]) / 60.0)
 	var mins := int(data["minute"]) % 60
 	weather_icon.texture = ICONS.get(str(data["weather"]), ICONS["Sunny"])
-	location.text = "%s   ·   Day %d   ·   %02d:%02d   ·   %s" % [game.world.region(game.player.position), int(data["day"]), hour, mins, data["weather"]]
+	location.text = "Day %d  ·  %02d:%02d  ·  %s" % [int(data["day"]), hour, mins, data["weather"]]
+	location.tooltip_text = game.world.region(game.player.position)
 	for id in bars:
 		bars[id].value = float(data[id])
 		bars[id].tooltip_text = "%s: %d / 100" % [id.capitalize(), int(data[id])]
 	for i in range(hotbar_buttons.size()):
 		hotbar_buttons[i].text = "%d  ×%d" % [i + 1, AffState.amount(HOTBAR[i])]
-	var index := int(data["quest"])
-	quest.text = "Journal · " + (str(AffState.QUESTS[index]["detail"]) if index < AffState.QUESTS.size() else "The story is complete.")
 	if game.placing >= 0:
 		prompt.text = "Click or E: place   ·   R: rotate   ·   Esc: cancel"
 	elif game._near_building() >= 0:
@@ -468,8 +499,14 @@ func refresh() -> void:
 		prompt.text = "E  ·  " + str(names.get(game.selected["kind"], "Gather " + str(game.selected["kind"])))
 
 func notify(text: String) -> void:
+	if notice_timer > 0.0:
+		if text != notice.text and not notice_queue.has(text):
+			if notice_queue.size() >= 6:
+				notice_queue.pop_front()
+			notice_queue.append(text)
+		return
 	notice.text = text
-	notice_timer = 3.0
+	notice_timer = 2.5
 
 func _process(delta: float) -> void:
 	if fishing and is_instance_valid(fish_marker):
@@ -479,3 +516,5 @@ func _process(delta: float) -> void:
 		notice_timer -= delta
 		if notice_timer <= 0:
 			notice.text = ""
+			if not notice_queue.is_empty():
+				notify(notice_queue.pop_front())

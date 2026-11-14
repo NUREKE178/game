@@ -3,6 +3,8 @@ const World = preload("res://scripts/affinix/world.gd")
 const Player = preload("res://scripts/affinix/player.gd")
 const HUD = preload("res://scripts/affinix/hud.gd")
 const Atmosphere = preload("res://scripts/affinix/atmosphere.gd")
+const Effect = preload("res://scripts/affinix/feedback.gd")
+const Indicator = preload("res://scripts/affinix/indicator.gd")
 var world: World
 var player: Player
 var hud: HUD
@@ -30,7 +32,10 @@ func _ready() -> void:
 	var start: Array = AffState.data.get("position", [288,320])
 	if start.size() == 2:
 		player.position = Vector2(float(start[0]), float(start[1]))
-	player.step_taken.connect(func(): AffAudio.play("step"))
+	player.step_taken.connect(func():
+		AffAudio.play("step")
+		_spawn_effect(player.position, "dust")
+	)
 	actors.add_child(player)
 	world.hero = player
 	world.attach_visuals(actors)
@@ -39,6 +44,10 @@ func _ready() -> void:
 	atmosphere.process_mode = Node.PROCESS_MODE_PAUSABLE
 	atmosphere.z_index = 8
 	add_child(atmosphere)
+	var indicator := Indicator.new()
+	indicator.game = self
+	indicator.z_index = 6
+	add_child(indicator)
 	day_light = CanvasModulate.new()
 	day_light.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(day_light)
@@ -52,6 +61,9 @@ func _ready() -> void:
 	AffState.message.connect(hud.notify)
 	AffState.quest_completed.connect(func(title: String): hud.notify("Journal updated: " + title))
 	hud.refresh()
+	var quest_index := int(AffState.data["quest"])
+	if quest_index < AffState.QUESTS.size():
+		hud.notify("Journal · " + str(AffState.QUESTS[quest_index]["detail"]))
 
 func _process(delta: float) -> void:
 	if paused:
@@ -229,7 +241,7 @@ func _interact() -> void:
 	if selected.is_empty():
 		return
 	var kind: String = selected["kind"]
-	player.interact_animation()
+	player.interact_animation("interact")
 	match kind:
 		"home": hud.open_home()
 		"npc":
@@ -274,6 +286,8 @@ func _gather(kind: String) -> void:
 		count = 2
 	elif kind == "mushroom" and AffState.data["weather"] == "Rain":
 		count = 2
+	player.interact_animation("chop" if kind == "tree" else "gather")
+	_spawn_effect(selected["pos"], "gather")
 	AffState.add_item(item, count)
 	AffState.data["depleted"][selected["id"]] = int(AffState.data["day"]) + 2
 	world._sync_obstacles()
@@ -283,6 +297,13 @@ func _gather(kind: String) -> void:
 	AffAudio.play("gather")
 	hud.notify("Collected %d %s." % [count, AffState.ITEM_NAMES.get(item, item)])
 	world.queue_redraw()
+
+func _spawn_effect(pos: Vector2, kind: String) -> void:
+	var effect := Effect.new()
+	effect.kind = kind
+	effect.position = pos
+	effect.z_index = 7
+	add_child(effect)
 
 func _float_pickup(text: String) -> void:
 	var label := Label.new()
