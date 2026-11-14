@@ -1,24 +1,30 @@
 config_version=5
 
 [application]
-config/name="ORMA — Сиқырлы орман"
+config/name="ASHORE"
 config/version="0.1.0"
 config/icon="res://icon.svg"
-run/main_scene="res://scenes/survival_menu.tscn"
-config/description="2D fantasy survival: explore, gather, craft and build."
+run/main_scene="res://scenes/island_menu.tscn"
+config/description="A first-person island survival prototype."
+
+[autoload]
+Preferences="*res://scripts/island/preferences.gd"
+Sound="*res://scripts/island/sound.gd"
 
 [display]
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
-window/title="ORMA — Сиқырлы орман"
+window/title="ASHORE"
 
 [gui]
 theme/custom="res://assets/fonts/game_theme.tres"
 
 [rendering]
-textures/canvas_textures/default_texture_filter=0
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.1, 0.13, 0.2, 1)
+environment/defaults/default_clear_color=Color(0.11, 0.14, 0.16, 1)
+
+[physics]
+3d/default_gravity=18.0
