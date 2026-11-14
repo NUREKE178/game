@@ -1,22 +1,22 @@
 config_version=5
 
 [application]
-config/name="ASHORE"
+config/name="AFFINIX"
 config/version="0.1.0"
 config/icon="res://icon.svg"
-run/main_scene="res://scenes/island_menu.tscn"
-config/description="A first-person island survival prototype."
+run/main_scene="res://scenes/affinix/menu.tscn"
+config/description="A peaceful top-down forest survival adventure."
 
 [autoload]
-Preferences="*res://scripts/island/preferences.gd"
-Sound="*res://scripts/island/sound.gd"
+AffState="*res://scripts/affinix/state.gd"
+AffAudio="*res://scripts/affinix/audio.gd"
 
 [display]
 window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
-window/title="ASHORE"
+window/stretch/aspect="keep"
+window/title="AFFINIX"
 
 [gui]
 theme/custom="res://assets/fonts/game_theme.tres"
@@ -24,7 +24,5 @@ theme/custom="res://assets/fonts/game_theme.tres"
 [rendering]
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-environment/defaults/default_clear_color=Color(0.11, 0.14, 0.16, 1)
-
-[physics]
-3d/default_gravity=18.0
+textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0.11, 0.16, 0.13, 1)

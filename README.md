@@ -1,45 +1,32 @@
-# ASHORE — 3D survival prototype
+# AFFINIX
 
-A first-person survival **vertical slice** in Godot 4. A plane descends toward a secluded island; the player wakes near the wreck, explores the forest, gathers supplies and makes a small camp. This is a prototype, not a completed 3–4 hour game, and its generated 3D models are placeholders rather than final photorealistic assets. There are currently no enemies, story campaign, tree cutting, swimming or multiplayer.
+A Godot 4 top-down pixel-art survival adventure. Open `project.godot` in Godot 4, allow the assets to import, then press **F5**. The active main scene is `scenes/affinix/menu.tscn`. Linux and Windows are the intended desktop platforms.
 
-## Run
+## Current scope
 
-Import `project.godot` in Godot 4, let assets finish importing, then press F5. On the main menu, choose **New Game**. If an existing save is present, a second press confirms replacement. **Continue** opens the saved island.
+This is the **first playable implementation**, not the requested finished 3–4 hour game. It includes a title menu, six connected stylized regions, Chill Boy movement, camera, terrain collision, gathering and respawn, inventory, crafting, structure placement and recovery, two NPC conversations and favors, fishing, a 13-step main journal, needs, sleep, day/night tint, weather, original synthesized music/effects, and one save slot. The original ASHORE and ORMA scenes remain in the repository but are not launched.
+
+The world and character art are early-stage original assets; the underground is represented as a region rather than a separate cave scene. Not yet complete: a hand-authored full-length campaign or verified 3–4 hour pacing, full NPC schedules, complete animal AI, drag-and-drop inventory/equipment, extensive building customization, distinct interaction animations, configurable controls, advanced tools, a cooking station, multiple save slots, proper ending polish, and comprehensive runtime testing. The generated title illustration and textures are original project assets; the small character/terrain sprites were made for the project. Nunito is licensed under SIL OFL (`assets/fonts/OFL-Nunito.txt`). Sounds are synthesized by `tools/make_affinix_audio.py` and `tools/make_island_audio.py`.
 
 ## Controls
 
-| Action | Key |
-| --- | --- |
-| Look | Mouse |
-| Move | W A S D |
-| Sprint | Left Shift |
-| Jump | Space |
-| Pick up resources / collect water near the pond | E |
-| Build campfire or shelter | C |
-| Eat berries | R |
-| Drink water | F |
-| Pause / skip the crash intro | Esc |
+- **WASD / arrows** move; **Shift** runs.
+- **E** or left click interacts. Approach the cabin first to read the notebook.
+- **I** opens inventory (select food to eat); **C** opens recipes and structures.
+- To build, choose a structure, move the mouse near the player and click or press **E**; **R** rotates, **Esc** cancels. Stand near a structure and press **X** to reclaim its materials. Use a chest with **E** to store or withdraw items; a tent permits sleep; a campfire enables recipes and warmth.
+- **J** opens the journal; **M** opens the map; **Esc** pauses.
+- Save manually from the pause menu or save and return to the title. Autosave runs every 30 seconds and on a normal window close. Data is stored separately from the earlier games at `user://affinix_save_v1.json`.
 
-Find sticks, stones and berry bushes on the ground. Fresh water is available at the pond inland. A campfire costs 3 sticks and 2 stones; a shelter costs 5 sticks. They are placed in front of the player on dry ground. The current shelter and fire are visual structures, not yet a complete warmth or sleeping system.
+The game asks for confirmation before replacing an existing AFFINIX save. Continue does not overwrite an unreadable save.
 
-Health decreases when food or water runs out. The player wakes near the wreck if health runs out or they fall off the island; collected supplies remain. The world is a finite island surrounded by ocean, not a voxel world and there is no digging.
-
-## Settings and saving
-
-Select **Low**, **Medium** or **High** graphics in the main menu or pause menu. The presets adjust 3D render scale, view distance, shadows and anti-aliasing; Medium is the default. These are manual settings, not automatic hardware detection. Master volume is adjustable in both menus; mouse sensitivity is in the main menu. Settings are saved in `user://ashore_settings.cfg`.
-
-The game stores one save in `user://ashore_save_v1.json`. Player position, needs, collected resources and placed structures are saved every 30 seconds, when leaving to the menu, and on a normal window close. The older 2D prototype uses a different save path and is not overwritten.
-
-## Assets
-
-The title background, forest floor and bark textures were generated for this project. The terrain, vegetation, wreck and structures are original procedural prototype meshes. Ambience, footsteps, item and crash sounds are synthesized by `tools/make_island_audio.py` without external samples. Nunito is provided under SIL Open Font License; see `assets/fonts/OFL-Nunito.txt`.
-
-## Checks
+## Testing
 
 ```sh
-python3 tests/check_island.py
-godot --headless --path . --editor --import
-godot --headless --path . --script res://tests/island_smoke.gd
+python3 tests/affinix/check_assets.py
+gdparse scripts/affinix/*.gd tests/affinix/smoke.gd
+# With Godot 4 installed, import the project first:
+godot --headless --editor --path . --import
+godot --headless --path . --script res://tests/affinix/smoke.gd
 ```
 
-The headless smoke test does not write save files. Graphical, audio, performance, gamepad and end-to-end save/restore checks still require interactive testing on a Godot-enabled system. The previous 2D prototype's scenes remain in the repository but are not the active game.
+The smoke test changes only in-memory state and does not write the player's save. It exercises state, crafting, placement, UI, pause and sleep; it is not a substitute for testing rendering, audio, input, the full story and save/reload interactively.

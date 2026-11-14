@@ -1,0 +1,42 @@
+extends SceneTree
+## Run in Godot 4 after importing. Does not write to the player's save file.
+func _initialize() -> void:
+	call_deferred("_run")
+
+func _run() -> void:
+	var state = root.get_node("AffState")
+	var previous: Dictionary = state.data.duplicate(true)
+	state.new_game()
+	assert(state.amount("wood") == 0)
+	state.add_item("wood", 3)
+	state.add_item("stone", 2)
+	state.set_flag("notebook")
+	assert(state.data["quest"] == 2)
+	state.craft(0)
+	assert(state.amount("axe") == 1)
+	assert(state.amount("wood") == 0)
+	state.add_item("wood", 3)
+	state.add_item("stone", 2)
+	assert(state.add_building(0, Vector2(320, 340), 0))
+	assert(state.has_building("campfire"))
+	assert(state.data["quest"] == 3)
+	var scene = load("res://scenes/affinix/game.tscn").instantiate()
+	root.add_child(scene)
+	await process_frame
+	assert(scene.player != null and scene.world != null and scene.hud != null)
+	assert(scene.world.region(Vector2(288, 320)) == "Whispering Forest")
+	scene.hud.open_inventory()
+	assert(scene.screen_open)
+	scene.hud.close_screen()
+	assert(not scene.screen_open)
+	scene.set_pause(true)
+	assert(paused)
+	scene.set_pause(false)
+	assert(not paused)
+	var old_day: int = int(state.data["day"])
+	state.sleep()
+	assert(state.data["day"] == old_day + 1)
+	scene.queue_free()
+	state.data = previous
+	print("AFFINIX smoke test passed")
+	quit(0)
